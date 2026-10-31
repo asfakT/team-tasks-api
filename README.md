@@ -1,59 +1,320 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Team Tasks API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+An API-only Laravel application where users create teams and manage tasks inside them. There is no browser UI. All endpoints are tested and documented with Postman.
 
-## About Laravel
+This is a learning project for Laravel API development: Sanctum authentication, custom policies, the action pattern, API resources and form requests.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Tech Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- PHP 8.2+
+- Laravel 12
+- Laravel Sanctum (API tokens)
+- MySQL (development), SQLite in memory (tests)
+- Postman (testing and documentation)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Features
 
-## Learning Laravel
+- Register, login, logout and current user with Sanctum tokens
+- Teams: create, list, show, update, delete
+- The user who creates a team becomes its owner
+- Owner can add or remove team members
+- Tasks inside a team with title, description, status, assignee and due date
+- Task status: `todo`, `doing`, `done`
+- Only the assignee can mark a task as `done`
+- Paginated list endpoints
+- Rate limiting on register and login (6 requests per minute)
+- Tokens expire after 7 days
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Authorization Rules
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+| Action | Who can do it |
+|---|---|
+| View a team and its tasks | Team members only |
+| Update or delete a team | Owner only |
+| Add or remove members | Owner only |
+| Create a task | Any team member |
+| Edit or delete a task | Task creator or team owner |
+| Mark a task as done | Assignee only |
 
-## Laravel Sponsors
+## How It Is Built
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+| Part | Where | Purpose |
+|---|---|---|
+| Policies | `app/Policies` | `TeamPolicy` and `TaskPolicy`, registered by hand with `Gate::policy()` in `AppServiceProvider`. Custom methods: `manageMembers()`, `complete()` |
+| Actions | `app/Actions` | One class per write: `CreateTeamAction`, `AddMemberAction`, `RemoveMemberAction`, `CreateTaskAction`, `CompleteTaskAction`, `RegisterUserAction`, `LoginUserAction` |
+| Form Requests | `app/Http/Requests` | Validation only |
+| API Resources | `app/Http/Resources` | `UserResource`, `TeamResource`, `TaskResource`. Models are never returned directly |
+| Controllers | `app/Http/Controllers/Api` | Thin: validate, authorize, call the action, return the resource |
+| Enum | `app/Enums/TaskStatus.php` | Allowed task status values |
 
-### Premium Partners
+## Installation
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+git clone https://github.com/asfakT/team-tasks-api.git
+cd team-tasks-api
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-## Contributing
+Create a MySQL database named `team_tasks`, then update `.env`:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=team_tasks
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-## Code of Conduct
+Run the migrations and start the server:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan migrate
+php artisan serve
+```
 
-## Security Vulnerabilities
+The API is available at `http://127.0.0.1:8000/api/v1`.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## API Endpoints
 
-## License
+All endpoints use the prefix `/api/v1`. Send the header `Accept: application/json` with every request. Protected endpoints also need `Authorization: Bearer {token}`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Auth
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| POST | `/register` | Public | Create an account and get a token |
+| POST | `/login` | Public | Log in and get a token |
+| GET | `/me` | Token | Current user |
+| POST | `/logout` | Token | Delete the current token |
+
+### Teams
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| GET | `/teams` | Token | List my teams (paginated) |
+| POST | `/teams` | Token | Create a team |
+| GET | `/teams/{team}` | Member | Show a team |
+| PUT | `/teams/{team}` | Owner | Update a team |
+| DELETE | `/teams/{team}` | Owner | Delete a team |
+
+### Members
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| GET | `/teams/{team}/members` | Member | List members (paginated) |
+| POST | `/teams/{team}/members` | Owner | Add a member by email |
+| DELETE | `/teams/{team}/members/{user}` | Owner | Remove a member |
+
+### Tasks
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| GET | `/teams/{team}/tasks` | Member | List tasks (paginated) |
+| POST | `/teams/{team}/tasks` | Member | Create a task |
+| GET | `/teams/{team}/tasks/{task}` | Member | Show a task |
+| PUT | `/teams/{team}/tasks/{task}` | Creator or owner | Update a task |
+| DELETE | `/teams/{team}/tasks/{task}` | Creator or owner | Delete a task |
+| POST | `/teams/{team}/tasks/{task}/complete` | Assignee | Mark a task as done |
+
+Task routes use scoped bindings, so a task that belongs to another team returns 404.
+
+## Request and Response Examples
+
+### Register
+
+```
+POST /api/v1/register
+```
+
+```json
+{
+    "name": "Asfak",
+    "email": "asfak@test.com",
+    "password": "password123",
+    "password_confirmation": "password123"
+}
+```
+
+Response `201`:
+
+```json
+{
+    "data": {
+        "user": {
+            "id": 1,
+            "name": "Asfak",
+            "email": "asfak@test.com",
+            "created_at": "2026-10-31T04:06:32.000000Z"
+        },
+        "token": "1|abc..."
+    }
+}
+```
+
+### Create Task
+
+```
+POST /api/v1/teams/1/tasks
+```
+
+```json
+{
+    "title": "Write API docs",
+    "description": "Postman collection",
+    "assignee_id": 2,
+    "due_date": "2026-11-10"
+}
+```
+
+Response `201`:
+
+```json
+{
+    "data": {
+        "id": 1,
+        "team_id": 1,
+        "title": "Write API docs",
+        "description": "Postman collection",
+        "status": "todo",
+        "creator_id": 1,
+        "assignee_id": 2,
+        "due_date": "2026-11-10",
+        "created_at": "2026-10-31T09:30:23.000000Z"
+    }
+}
+```
+
+### Error responses
+
+Validation error `422`:
+
+```json
+{
+    "message": "The email field is required.",
+    "errors": {
+        "email": ["The email field is required."]
+    }
+}
+```
+
+Not allowed `403`:
+
+```json
+{
+    "message": "This action is unauthorized."
+}
+```
+
+## Status Codes
+
+| Code | Meaning |
+|---|---|
+| 200 | OK |
+| 201 | Created |
+| 204 | Deleted, no content |
+| 401 | Missing or invalid token |
+| 403 | Not allowed by policy |
+| 404 | Not found, or not part of this team |
+| 422 | Validation failed |
+| 429 | Too many requests |
+
+## Validation Rules
+
+| Field | Rules |
+|---|---|
+| Register `name` | required, string, max 255 |
+| Register `email` | required, lowercase, valid email, unique |
+| Register `password` | required, confirmed, min 8 |
+| Team `name` | required, string, max 255 |
+| Member `email` | required, must belong to an existing user |
+| Task `title` | required on create, string, max 255 |
+| Task `status` | `todo` or `doing` only (`done` uses the complete endpoint) |
+| Task `assignee_id` | optional, must be a member of the team |
+| Task `due_date` | optional, valid date |
+
+## Database Design
+
+```
+users
+  id
+  name
+  email (unique)
+  password
+  timestamps
+
+teams
+  id
+  name
+  owner_id  -> users.id  (cascade on delete)
+  timestamps
+
+team_user  (pivot: team members)
+  id
+  team_id   -> teams.id  (cascade on delete)
+  user_id   -> users.id  (cascade on delete)
+  timestamps
+  unique (team_id, user_id)
+
+tasks
+  id
+  team_id      -> teams.id  (cascade on delete)
+  creator_id   -> users.id  (cascade on delete)
+  assignee_id  -> users.id  (nullable, set null on delete)
+  title
+  description  (nullable)
+  status       (todo | doing | done, default todo)
+  due_date     (nullable)
+  timestamps
+  index (team_id, status)
+
+personal_access_tokens  (Sanctum tokens)
+```
+
+### Relationships
+
+```
+User 1 ---- * Team          (owner_id: a user owns many teams)
+User * ---- * Team          (team_user: a user belongs to many teams)
+Team 1 ---- * Task          (a team has many tasks)
+User 1 ---- * Task          (creator_id: a user creates many tasks)
+User 1 ---- * Task          (assignee_id: a user is assigned many tasks)
+```
+
+## Postman
+
+The collection and environment are in the `postman/` folder.
+
+1. Open Postman and click Import.
+2. Import the collection file and the environment file from `postman/`.
+3. Select the `Team Tasks Local` environment.
+4. Run `Auth > login`. The token is saved to the environment automatically.
+5. All other requests use the token through the collection's Bearer auth.
+
+Environment variables:
+
+| Variable | Value |
+|---|---|
+| `base_url` | `http://127.0.0.1:8000/api/v1` |
+| `token` | Set automatically by login |
+| `team_id` | Set automatically by Create Team |
+| `task_id` | Set automatically by Create Task |
+
+Every request has saved examples for success and error cases (401, 403, 404, 422).
+
+## Running Tests
+
+```bash
+php artisan test
+```
+
+Tests run on an in-memory SQLite database, so the development database is never touched. The `pdo_sqlite` PHP extension must be enabled.
+
+Current tests cover the auth endpoints (register, login, me, logout).
+
+## To Do
+
+- Feature tests for each `TeamPolicy` and `TaskPolicy` rule
+- Seeder with owner, member and stranger users for quick manual testing
